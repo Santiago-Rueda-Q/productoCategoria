@@ -13,6 +13,15 @@
     </div>
 
     <div class="mb-4">
+        <strong class="text-lg font-medium">Imagen:</strong>
+        @if($producto->imagen)
+            <img src="{{ asset('storage/'.$producto->imagen) }}" alt="{{ $producto->nombre }}" class="h-48 rounded-md shadow mt-2">
+        @else
+            <span class="text-gray-500">Sin imagen</span>
+        @endif
+    </div>
+
+    <div class="mb-4">
         <strong class="text-lg font-medium">Precio:</strong> <span>${{ number_format($producto->precio, 2) }}</span>
     </div>
 
