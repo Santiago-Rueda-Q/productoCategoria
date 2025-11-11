@@ -6,21 +6,33 @@ use Illuminate\Http\Request;
 use App\Models\Producto;
 use App\Models\Categoria;
 use Illuminate\Support\Facades\Storage;
+use Maatwebsite\Excel\Facades\Excel;
+use App\Exports\ProductosExport;
+use Barryvdh\DomPDF\Facade\Pdf;
 
 class ProductoController extends Controller
 {
+    /**
+     * Mostrar el listado de productos (vista principal)
+     */
     public function index()
     {
-        $productos = Producto::with('categoria')->get();
+        $productos = Producto::with('categoria')->paginate(10);
         return view('productos.index', compact('productos'));
     }
 
+    /**
+     * Crear un nuevo producto
+     */
     public function create()
     {
-        $categorias = Categoria::all();
+        $categorias = Categoria::where('activo', 1)->get();
         return view('productos.create', compact('categorias'));
     }
 
+    /**
+     * Guardar un producto
+     */
     public function store(Request $request)
     {
         $request->validate([
@@ -43,22 +55,31 @@ class ProductoController extends Controller
         Producto::create($data);
 
         return redirect()->route('productos.index')
-                        ->with('success', 'Producto creado exitosamente.');
+            ->with('success', 'Producto creado exitosamente.');
     }
 
+    /**
+     * Mostrar detalles
+     */
     public function show(string $id)
     {
         $producto = Producto::with('categoria')->findOrFail($id);
         return view('productos.show', compact('producto'));
     }
 
+    /**
+     * Editar
+     */
     public function edit(string $id)
     {
         $producto = Producto::findOrFail($id);
-        $categorias = Categoria::all();
+        $categorias = Categoria::where('activo', 1)->get();
         return view('productos.edit', compact('producto', 'categorias'));
     }
 
+    /**
+     * Actualizar
+     */
     public function update(Request $request, string $id)
     {
         $request->validate([
@@ -86,20 +107,54 @@ class ProductoController extends Controller
         $producto->update($data);
 
         return redirect()->route('productos.index')
-                        ->with('success', 'Producto actualizado exitosamente.');
+            ->with('success', 'Producto actualizado exitosamente.');
     }
 
+    /**
+     * Eliminar
+     */
     public function destroy(string $id)
     {
-        $producto = Producto::findOrFail($id);
+        try {
+            $producto = Producto::findOrFail($id);
 
-        if ($producto->imagen && Storage::disk('public')->exists($producto->imagen)) {
-            Storage::disk('public')->delete($producto->imagen);
+            if ($producto->imagen && Storage::disk('public')->exists($producto->imagen)) {
+                Storage::disk('public')->delete($producto->imagen);
+            }
+
+            $producto->delete();
+
+            return redirect()->route('productos.index')
+                ->with('success', 'Producto eliminado exitosamente.');
+        } catch (\Exception $e) {
+            return redirect()->route('productos.index')
+                ->with('error', 'Error al eliminar el producto: ' . $e->getMessage());
         }
+    }
 
-        $producto->delete();
+    /**
+     * Exportar a Excel
+     */
+    public function exportExcel()
+    {
+        return Excel::download(new ProductosExport, 'productos_'.date('Y-m-d_His').'.xlsx');
+    }
 
-        return redirect()->route('productos.index')
-                        ->with('success', 'Producto eliminado exitosamente.');
+    /**
+     * Generar PDF
+     */
+    public function exportPdf()
+    {
+        $productos = Producto::with('categoria')->get();
+        $pdf = Pdf::loadView('productos.reporte', [
+            'productos' => $productos,
+            'total' => $productos->count(),
+            'valorTotal' => $productos->sum(function($p) {
+                return $p->precio * $p->stock;
+            }),
+            'fecha' => date('d/m/Y H:i'),
+        ]);
+
+        return $pdf->download('reporte_productos_'.date('Y-m-d_His').'.pdf');
     }
 }
